@@ -25,9 +25,10 @@ app = FastAPI(title="AI Support Demo", version="0.2.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3000",   # old web frontend
-        "http://localhost:8081",   # Expo web dev server
-        "http://127.0.0.1:8081",   # Expo web via 127.0.0.1
+        "http://localhost:3000",           # old web frontend (local dev)
+        "http://localhost:8081",           # Expo web dev server
+        "http://127.0.0.1:8081",           # Expo web via 127.0.0.1
+        "https://ticketing-system-roan.vercel.app",  # deployed web frontend
     ],
     allow_methods=["*"],
     allow_headers=["*"],
