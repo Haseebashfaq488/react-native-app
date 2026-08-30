@@ -13,3 +13,26 @@ web-build/
 __pycache__/
 *.pyc
 *.log
+
+# --- Frontend (React Native) app — kept locally as backup, NOT in the repo ---
+# The GitHub repo is backend-only for Railway. These files stay on disk but
+# must never be re-added to git.
+app/
+components/
+lib/
+test/
+test-artifacts/
+assets/
+package.json
+package-lock.json
+app.json
+babel.config.js
+metro.config.js
+tailwind.config.js
+nativewind-env.d.ts
+global.css
+tsconfig.json
+render.yaml
+AGENTS.md
+design for the app.fig
+screesnhots for the design.png
