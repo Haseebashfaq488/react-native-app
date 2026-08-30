@@ -12,6 +12,8 @@ from core.models import (
     RegisterRequest,
     RespondRequest,
     ForgotPasswordRequest,
+    ChangePasswordRequest,
+    ProfileUpdate,
 )
 from core.support_agent import analyze_ticket, chat_reply
 from core import tools
@@ -112,6 +114,58 @@ def auth_me(email: str):
         "plan": customer.get("plan"),
     }
 
+
+# ------------------------- PROFILE -------------------------
+
+@app.get("/api/profile")
+def get_profile(email: str):
+    """Return the full customers row for an email (auto-creates a default row)."""
+    if not email or not email.strip():
+        raise HTTPException(status_code=400, detail="email is required")
+    profile = tools.get_or_create_customer_profile(email)
+    if not profile or not profile.get("email"):
+        raise HTTPException(status_code=500, detail="Failed to load profile")
+    return profile
+
+
+@app.put("/api/profile")
+def update_profile(payload: ProfileUpdate):
+    """Update the customers table with the profile page fields."""
+    updated = tools.update_customer_profile(
+        payload.email,
+        {
+            "name": payload.name,
+            "plan": payload.plan,
+            "account_status": payload.account_status,
+            "payment_status": payload.payment_status,
+            # Derived automatically from the plan so the customers table stays consistent.
+            "subscription_status": "free_plan" if payload.plan == "free" else "active_premium",
+        },
+    )
+    if updated.get("error"):
+        raise HTTPException(status_code=500, detail=updated["error"])
+    return updated
+
+
+@app.post("/api/auth/change-password")
+def auth_change_password(payload: ChangePasswordRequest):
+    """Verify the current password, then set a new one via the admin client."""
+    try:
+        res = get_supabase().auth.sign_in_with_password(
+            {"email": payload.email, "password": payload.current_password}
+        )
+    except Exception:
+        raise HTTPException(status_code=401, detail="Current password is incorrect.")
+
+    uid = res.user.id
+    try:
+        get_admin_client().auth.admin.update_user_by_id(
+            uid, {"password": payload.new_password}
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)[:200])
+
+    return {"status": "ok", "message": "Password updated successfully."}
 
 
 # ------------------------- TICKETS -------------------------
