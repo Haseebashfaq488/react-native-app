@@ -25,11 +25,65 @@ def get_customer(email: str) -> dict:
         "name": None,
         "email": email.lower(),
         "plan": "free",
+        "role": "customer",
         "account_status": "unknown",
         "payment_status": "unknown",
         "subscription_status": "unknown",
         "last_payment_date": None,
     }
+
+
+def get_customer_by_auth_id(auth_id: str) -> dict:
+    """Get the customer/profile row linked to a Supabase Auth user id.
+
+    The link is the real identity (auth.users.id), so role lookups never
+    depend on an email match.
+    """
+    if not auth_id:
+        return {}
+    try:
+        res = _sb().table("customers").select("*").eq("auth_id", auth_id).execute()
+        if res.data:
+            return res.data[0]
+    except Exception:
+        pass
+    return {}
+
+
+def get_or_create_customer_auth(auth_id: str, email: str, name: str = None) -> dict:
+    """Get or create a customer row linked to an auth user by auth id.
+
+    Prefers the auth_id (the real identity) over an email match, and stores
+    the auth id on the row so the profile is always resolvable to the user.
+    """
+    clean_email = (email or "").strip().lower()
+    if auth_id:
+        existing = get_customer_by_auth_id(auth_id)
+        if existing:
+            return existing
+    try:
+        cust_name = name or (clean_email.split("@")[0].capitalize() if clean_email else "User")
+        res = (
+            _sb()
+            .table("customers")
+            .insert({"auth_id": auth_id or None, "name": cust_name, "email": clean_email})
+            .execute()
+        )
+        if res.data:
+            return res.data[0]
+    except Exception:
+        pass
+    return get_customer(clean_email) if clean_email else {}
+
+
+def link_customer_auth_id(customer_id: int, auth_id: str) -> None:
+    """Backfill auth_id on an existing customer row (idempotent link)."""
+    if not customer_id or not auth_id:
+        return
+    try:
+        _sb().table("customers").update({"auth_id": auth_id}).eq("id", customer_id).execute()
+    except Exception:
+        pass
 
 
 def get_customer_by_id(customer_id: int) -> dict:
@@ -282,6 +336,7 @@ def get_or_create_customer_profile(email: str) -> dict:
         "name": email.split("@")[0],
         "email": email,
         "plan": "free",
+        "role": "customer",
         "account_status": "active",
         "payment_status": "none",
         "subscription_status": "free_plan",

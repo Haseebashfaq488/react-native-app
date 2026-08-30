@@ -10,14 +10,41 @@
 
 CREATE TABLE IF NOT EXISTS customers (
     id                  BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    auth_id             UUID UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
     name                TEXT NOT NULL,
     email               TEXT UNIQUE NOT NULL,
     plan                TEXT DEFAULT 'free',
     account_status      TEXT DEFAULT 'active',
     payment_status      TEXT DEFAULT 'none',
     subscription_status TEXT DEFAULT 'free_plan',
+    role                TEXT DEFAULT 'customer' CHECK (role IN ('customer', 'admin')),
     created_at          TIMESTAMPTZ DEFAULT now()
 );
+
+-- ------------------------------------------------------------------
+-- MIGRATION (existing databases) — run the block below as needed.
+-- ------------------------------------------------------------------
+
+-- 1) Add the role column (idempotent).
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'customer' CHECK (role IN ('customer', 'admin'));
+
+-- 2) Add auth_id linking each profile row to its Supabase Auth user.
+--    unique constraint lets us resolve the signed-in user's role by auth
+--    user id instead of trusting an email match.
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS auth_id UUID REFERENCES auth.users(id) ON DELETE CASCADE;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_auth_id ON customers(auth_id);
+
+-- 3) Backfill auth_id for existing customers by matching their email to an
+--    existing Supabase Auth user. Rows with no matching auth user stay NULL
+--    (legacy rows only — new registrations always set auth_id).
+UPDATE customers c
+SET auth_id = u.id
+FROM auth.users u
+WHERE c.auth_id IS NULL AND c.email = u.email;
+
+-- 4) How to promote an existing user to admin (adjust the email):
+--    UPDATE customers SET role = 'admin' WHERE email = 'admin@novaware.com';
+--    On sign-in the app now reads auth_id → role → shows the dashboard.
 
 -- Test data (skip if already inserted)
 INSERT INTO customers (name, email, plan, account_status, payment_status, subscription_status)

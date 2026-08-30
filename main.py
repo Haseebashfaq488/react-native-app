@@ -44,9 +44,11 @@ def health():
 
 @app.post("/api/auth/register", status_code=201)
 def auth_register(payload: RegisterRequest):
-    """Create a Supabase Auth user (auto-confirmed) + a customer profile row."""
+    """Create a Supabase Auth user (auto-confirmed) + a customer profile row
+    linked to that auth user by id (auth_id FK)."""
+    created = None
     try:
-        get_admin_client().auth.admin.create_user(
+        created = get_admin_client().auth.admin.create_user(
             {
                 "email": payload.email,
                 "password": payload.password,
@@ -62,8 +64,19 @@ def auth_register(payload: RegisterRequest):
             )
         raise HTTPException(status_code=400, detail=msg[:200])
 
-    tools.get_or_create_customer(payload.email, payload.name)
-    return {"name": payload.name, "email": payload.email}
+    # The new auth user's id is the stable identity; store it on the customer
+    # row so role lookups are keyed by auth_id, not by email.
+    new_auth_id = created.user.id if created and created.user else None
+    cust = tools.get_or_create_customer_auth(new_auth_id, payload.email, payload.name)
+
+    return {
+        "id": cust.get("id"),
+        "auth_id": new_auth_id,
+        "name": payload.name,
+        "email": payload.email,
+        "plan": cust.get("plan"),
+        "role": cust.get("role") or "customer",
+    }
 
 
 @app.post("/api/auth/forgot-password")
@@ -84,7 +97,12 @@ def auth_forgot_password(payload: ForgotPasswordRequest):
 
 @app.post("/api/auth/login")
 def auth_login(payload: LoginRequest):
-    """Verify the password against Supabase Auth and return the profile."""
+    """Verify the password against Supabase Auth and return the profile.
+
+    Role is resolved from the customers row linked to the signed-in auth user
+    id (auth_id). Falls back to an email match for legacy rows and backfills
+    the auth_id so the link is permanent from the first login onward.
+    """
     try:
         res = get_supabase().auth.sign_in_with_password(
             {"email": payload.email, "password": payload.password}
@@ -92,27 +110,49 @@ def auth_login(payload: LoginRequest):
     except Exception:
         raise HTTPException(status_code=401, detail="Incorrect email or password.")
 
-    customer = tools.get_customer(payload.email)
+    auth_id = getattr(getattr(res, "user", None), "id", None)
+    customer = {}
+    if auth_id:
+        customer = tools.get_customer_by_auth_id(auth_id)
+    if not customer.get("id"):
+        customer = tools.get_customer(payload.email)
+    # Permanently link the profile to the auth identity (idempotent).
+    if auth_id and customer.get("id") and not customer.get("auth_id"):
+        tools.link_customer_auth_id(customer["id"], auth_id)
+        customer["auth_id"] = auth_id
+
     meta = getattr(res.user, "user_metadata", None) or {}
     return {
         "id": customer.get("id"),
+        "auth_id": auth_id,
         "name": customer.get("name") or meta.get("name"),
         "email": payload.email,
         "plan": customer.get("plan"),
+        "role": customer.get("role") or "customer",
     }
 
 
 @app.get("/api/auth/me")
-def auth_me(email: str):
-    """Refresh the signed-in customer's profile."""
-    customer = tools.get_customer(email)
+def auth_me(email: str | None = None, auth_id: str | None = None):
+    """Refresh the signed-in customer's profile.
+
+    Prefers auth_id (the signed-in auth user's id) to resolve the role;
+    falls back to an email match for legacy clients.
+    """
+    customer = {}
+    if auth_id:
+        customer = tools.get_customer_by_auth_id(auth_id)
+    if not customer.get("id") and email:
+        customer = tools.get_customer(email)
     if not customer.get("id"):
         raise HTTPException(status_code=404, detail="Account not found.")
     return {
         "id": customer.get("id"),
+        "auth_id": auth_id or customer.get("auth_id"),
         "name": customer.get("name"),
         "email": customer.get("email"),
         "plan": customer.get("plan"),
+        "role": customer.get("role") or "customer",
     }
 
 
