@@ -328,10 +328,12 @@ def start_chat(customer_email: str = "guest"):
 
 @app.post("/api/chat")
 def chat(payload: ChatRequest):
-    # Find or create conversation
-    conversation_id = None
-    if payload.conversation_id:
-        conversation_id = payload.conversation_id
+    # Find or create conversation (so the conversation_id can be used to
+    # convert the chat into a ticket later).
+    conversation_id = payload.conversation_id
+    if not conversation_id:
+        conv = tools.create_conversation(payload.customer_email or "guest")
+        conversation_id = conv.get("id")
 
     history = [{"role": m.role, "content": m.content} for m in payload.messages]
 
