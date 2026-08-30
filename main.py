@@ -295,6 +295,15 @@ def custom_respond(ticket_id: int, payload: RespondRequest):
     return {"status": "RESOLVED", "email": email_result}
 
 
+@app.delete("/api/tickets/{ticket_id}")
+def delete_ticket(ticket_id: int):
+    """Permanently delete a ticket and its AI analysis."""
+    result = tools.delete_ticket(ticket_id)
+    if result.get("error") or not result.get("deleted"):
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    return {"status": "deleted", "ticket_id": ticket_id}
+
+
 # ------------------------- DASHBOARD -------------------------
 
 @app.get("/api/dashboard")

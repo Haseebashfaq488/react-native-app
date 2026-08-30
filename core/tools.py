@@ -115,6 +115,19 @@ def update_ticket(ticket_id: int, updates: dict) -> dict:
         return {"error": str(e)}
 
 
+def delete_ticket(ticket_id: int) -> dict:
+    """Permanently delete a ticket and its cascade-related rows.
+
+    ai_analyses rows cascade automatically; activity_logs/customers/
+    conversations references are set to NULL by the DB schema.
+    """
+    try:
+        res = _sb().table("support_tickets").delete().eq("id", ticket_id).execute()
+        return {"deleted": len(res.data) > 0}
+    except Exception as e:
+        return {"error": str(e)}
+
+
 def save_ai_analysis(ticket_id: int, analysis: dict) -> dict:
     """Persist the AI analysis result for traceability."""
     row = {
