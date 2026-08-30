@@ -6,7 +6,7 @@ only the minimum fields needed for support. Passwords, tokens and
 secrets are never returned by any tool here.
 """
 from . import knowledge
-from app.supabase_client import get_admin_client
+from core.supabase_client import get_admin_client
 
 
 def _sb():

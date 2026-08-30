@@ -4,7 +4,7 @@ import threading
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.models import (
+from core.models import (
     ChatRequest,
     TicketCreate,
     ConvertChatRequest,
@@ -13,10 +13,10 @@ from app.models import (
     RespondRequest,
     ForgotPasswordRequest,
 )
-from app.support_agent import analyze_ticket, chat_reply
-from app import tools
-from app.supabase_client import get_supabase, get_admin_client
-from app.email_service import send_ticket_confirmation, send_support_response
+from core.support_agent import analyze_ticket, chat_reply
+from core import tools
+from core.supabase_client import get_supabase, get_admin_client
+from core.email_service import send_ticket_confirmation, send_support_response
 
 app = FastAPI(title="AI Support Demo", version="0.2.0")
 
@@ -330,7 +330,7 @@ def convert_chat(payload: ConvertChatRequest):
 @app.get("/api/tickets/{ticket_id}/activity")
 def get_activity(ticket_id: int):
     try:
-        from app.supabase_client import get_admin_client
+        from core.supabase_client import get_admin_client
         sb = get_admin_client()
         res = (
             sb.table("activity_logs")

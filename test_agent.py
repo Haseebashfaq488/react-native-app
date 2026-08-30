@@ -1,6 +1,6 @@
 import sys
 import traceback
-from app import support_agent
+from core import support_agent
 
 try:
     print("Testing analyze_ticket...")
