@@ -210,19 +210,9 @@ def create_ticket(payload: TicketCreate):
     )
     tools.log_activity(ticket_id, "system", "email_sent", email_result)
 
-    # 5) For AUTO_RESPONSE, send the AI's response automatically.
-    suggested_response = (result.get("analysis") or {}).get("suggested_response", "")
-    if result.get("decision") == "AUTO_RESPONSE" and suggested_response:
-        auto_email = send_support_response(
-            customer_name=payload.customer_name,
-            customer_email=payload.customer_email,
-            ticket_id=ticket_id,
-            response_text=suggested_response,
-        )
-        tools.log_activity(ticket_id, "system", "auto_response_sent", auto_email)
-        result["auto_response_sent"] = True
-    else:
-        result["auto_response_sent"] = False
+    # 5) AUTO_RESPONSE emails are sent automatically inside analyze_ticket
+    #    (core/support_agent.py) — no human approval needed. Propagate the flag.
+    result["auto_response_sent"] = bool(result.get("auto_response_sent"))
 
     result["customer_name"] = payload.customer_name
     result["customer_email"] = payload.customer_email

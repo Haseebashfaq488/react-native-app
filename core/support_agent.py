@@ -11,6 +11,7 @@ Responsibilities:
 import json
 
 from . import knowledge, policy, tools
+from .email_service import send_support_response
 from .llm import LLMError, llm_json, llm_text, MODEL
 from .models import validate_analysis
 from .skill import CUSTOMER_SUPPORT_SKILL
@@ -189,6 +190,21 @@ def analyze_ticket(ticket_id: int, name: str, email: str, subject: str, message:
         "decision": verdict["decision"],
     })
 
+    # 6) AUTO_RESPONSE sends the reply to the customer automatically —
+    #    no human approval needed. HUMAN_REVIEW tickets stay for a human.
+    auto_response_sent = False
+    if verdict["decision"] == "AUTO_RESPONSE":
+        suggested = (analysis.get("suggested_response") or "").strip()
+        if suggested:
+            email_result = send_support_response(
+                customer_name=name,
+                customer_email=email,
+                ticket_id=ticket_id,
+                response_text=suggested,
+            )
+            tools.log_activity(ticket_id, "system", "auto_response_sent", email_result)
+            auto_response_sent = True
+
     return {
         "ticket_id": ticket_id,
         "analysis": analysis,
@@ -196,6 +212,7 @@ def analyze_ticket(ticket_id: int, name: str, email: str, subject: str, message:
         **verdict,
         "agent_trace": steps,
         "ai_failed": ai_failed,
+        "auto_response_sent": auto_response_sent,
         "status": "IN_PROGRESS" if verdict["decision"] == "HUMAN_REVIEW"
                   else "RESOLVED",
     }
